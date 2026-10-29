@@ -4,7 +4,7 @@ title: '#4471 · three problems, not one'
 owner: support desk
 status: closed
 reviewed: 2026-10-29
-signature: ryn830 via Claude
+signature: 'v1.eyJzdWIiOiI2Mzk5IiwiYXVkIjoiY2hhbGxlbmdlOndoYXQtaXQtc2hvd3MiLCJpYXQiOjE3OTMzMTUxOTYsImV4cCI6MTc5MzQwMTU5Nn0.KWrBW1LRG0XD9Mn1qe5AXiOeWF3mDV_grTCaQ7i4IIE'
 ---
 
 <script>
