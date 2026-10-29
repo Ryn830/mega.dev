@@ -1,0 +1,49 @@
+---
+layout: runbook
+title: '#4471 · three problems, not one'
+owner: support desk
+status: open
+reviewed: 2026-10-29
+signature: ryn830 via Claude
+---
+
+<script>
+  import ProblemTable from '#lib/kb/ProblemTable.svelte';
+  import RenderStamp from '#lib/kb/RenderStamp.svelte';
+  import Callout from '#lib/kb/Callout.svelte';
+</script>
+
+[#4471](/kb/incidents/4471) says one issue with one fix queued. Read report by report, it is three
+problems. The parser fix that is queued closes only the first one.
+
+<Callout kind="warn">
+Not known. Three problems, one fix queued. Each now has its own ticket.
+</Callout>
+
+## What is in #4471
+
+<ProblemTable ticket={4471} />
+
+## How each report was placed
+
+1. **One report per id.** The export pages overlap, so some reports come twice. Count each id once.
+2. **Where it comes from, not what intake guessed.** Intake tags a report from the reporter's browser.
+   The cause depends on the tenant: their locale and their booking form. A tenant in Lisbon with an
+   American browser is still a day-first tenant.
+3. **`hint`:** the report came through the booking form of a day-first tenant on `booking-v3`. That
+   form prints `MM/DD/YYYY` under the date, so people type month first and the form reads it day first.
+   Fixing the parser does not change the hint.
+4. **`one-day`:** the desk read these as a one-day move (desk notes): Tuesday became Monday, an invite
+   came before its booking, one meeting held twice by clients in two time zones. A flipped month
+   cannot do that. Look at time zones and DST, not at date order.
+5. **`parser`:** every other report. A day-first tenant's date came out month first.
+
+## What to do
+
+- Keep #4471 for `parser`, and ship the queued fix against it.
+- Change the `booking-v3` date hint for day-first tenants, or make the form read what its hint asks for.
+- Open the time-zone question for `one-day` before anyone closes it as a duplicate.
+- Merging by subject line ([decision 0001](/kb/decisions/0001-dedupe-by-subject)) put all three
+  in one ticket. The same subject line does not mean the same cause.
+
+<RenderStamp {signature} />
