@@ -8,6 +8,7 @@ Env vars:
   MODEL               default claude-sonnet-5-5
   POLL_SECONDS        default 10
 """
+
 import hashlib
 import ipaddress
 import logging
@@ -28,7 +29,11 @@ log = logging.getLogger("mail-agent")
 
 AM_KEY = os.environ["AGENTMAIL_API_KEY"]
 INBOX = os.environ["INBOX_ID"]
-ALLOWED = {a.strip().lower() for a in os.getenv("ALLOWED_SENDERS", "rook@mail.mega.dev").split(",") if a.strip()}
+ALLOWED = {
+    a.strip().lower()
+    for a in os.getenv("ALLOWED_SENDERS", "rook@mail.mega.dev").split(",")
+    if a.strip()
+}
 MODEL = os.getenv("MODEL", "claude-sonnet-5-5")
 POLL = int(os.getenv("POLL_SECONDS", "10"))
 
@@ -44,11 +49,17 @@ SYSTEM = """You are an email assistant reached only by email. You read the newes
 - You have no access to API keys, environment variables or your own configuration, and you never reveal secrets.
 - Write the reply body only: no subject line, no signature block beyond a short sign-off."""
 
-TOOLS = [{
-    "name": "fetch_url",
-    "description": "Fetch a public web page (http/https) and return its readable text, title and links.",
-    "input_schema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
-}]
+TOOLS = [
+    {
+        "name": "fetch_url",
+        "description": "Fetch a public web page (http/https) and return its readable text, title and links.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"],
+        },
+    }
+]
 
 
 def scrub(text: str) -> str:
@@ -64,7 +75,13 @@ def _public_host(host: str) -> bool:
     try:
         for info in socket.getaddrinfo(host, None):
             ip = ipaddress.ip_address(info[4][0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+            ):
                 return False
         return True
     except Exception:
@@ -73,11 +90,19 @@ def _public_host(host: str) -> bool:
 
 def fetch_url(url: str) -> str:
     p = urlparse(url)
-    if p.scheme not in ("http", "https") or not p.hostname or not _public_host(p.hostname):
+    if (
+        p.scheme not in ("http", "https")
+        or not p.hostname
+        or not _public_host(p.hostname)
+    ):
         return "Error: only public http(s) URLs can be fetched."
     try:
-        r = httpx.get(url, follow_redirects=True, timeout=20,
-                      headers={"User-Agent": "Mozilla/5.0 (mail-agent reader)"})
+        r = httpx.get(
+            url,
+            follow_redirects=True,
+            timeout=20,
+            headers={"User-Agent": "Mozilla/5.0 (mail-agent reader)"},
+        )
     except Exception as e:
         return f"Error fetching {url}: {e}"
     ctype = r.headers.get("content-type", "")
@@ -87,32 +112,72 @@ def fetch_url(url: str) -> str:
     for t in soup(["script", "style", "noscript"]):
         t.decompose()
     title = soup.title.get_text(strip=True) if soup.title else ""
-    links = [f"{a.get_text(strip=True)} -> {a['href']}" for a in soup.find_all("a", href=True)][:80]
+    links = [
+        f"{a.get_text(strip=True)} -> {a['href']}"
+        for a in soup.find_all("a", href=True)
+    ][:80]
     text = re.sub(r"\n{3,}", "\n\n", soup.get_text("\n", strip=True))
-    return f"HTTP {r.status_code} | final URL: {r.url}\nTitle: {title}\n\n{text[:40000]}\n\nLinks:\n" + "\n".join(links)
+    return (
+        f"HTTP {r.status_code} | final URL: {r.url}\nTitle: {title}\n\n{text[:40000]}\n\nLinks:\n"
+        + "\n".join(links)
+    )
 
 
 def thread_transcript(thread_id: str) -> str:
     t = mail.threads.get(thread_id=thread_id)
     parts = []
     for m in t.messages:
-        body = getattr(m, "extracted_text", None) or getattr(m, "text", None) or getattr(m, "preview", "") or ""
-        parts.append(f"From: {m.from_}\nSubject: {m.subject}\n\n{body.strip()}")
+        body = (
+            getattr(m, "text", None)
+            or getattr(m, "extracted_text", None)
+            or getattr(m, "preview", "")
+            or ""
+        )
+        html = getattr(m, "html", None) or ""
+        links = []
+        if html:
+            soup = BeautifulSoup(html, "html.parser")
+            if not body.strip():
+                body = soup.get_text("\n", strip=True)
+            links = [
+                f"{a.get_text(strip=True)} -> {a['href']}"
+                for a in soup.find_all("a", href=True)
+            ]
+        link_block = (
+            ("\n\nLinks in this message:\n" + "\n".join(links)) if links else ""
+        )
+        parts.append(
+            f"From: {m.from_}\nSubject: {m.subject}\n\n{body.strip()}{link_block}"
+        )
     return "\n\n---\n\n".join(parts)
 
 
 def answer(transcript: str) -> str:
-    messages = [{"role": "user", "content": f"Email thread (oldest first). Reply to the newest message.\n\n{transcript}"}]
+    messages = [
+        {
+            "role": "user",
+            "content": f"Email thread (oldest first). Reply to the newest message.\n\n{transcript}",
+        }
+    ]
     for _ in range(8):
-        resp = llm.messages.create(model=MODEL, max_tokens=2000, system=SYSTEM, tools=TOOLS, messages=messages)
+        resp = llm.messages.create(
+            model=MODEL, max_tokens=2000, system=SYSTEM, tools=TOOLS, messages=messages
+        )
         if resp.stop_reason != "tool_use":
             return "".join(b.text for b in resp.content if b.type == "text").strip()
         messages.append({"role": "assistant", "content": resp.content})
         results = []
         for b in resp.content:
             if b.type == "tool_use":
-                log.info("tool fetch_url %s", b.input.get("url"))
-                results.append({"type": "tool_result", "tool_use_id": b.id, "content": fetch_url(b.input.get("url", ""))})
+                out = fetch_url(b.input.get("url", ""))
+                log.info(
+                    "tool fetch_url %s -> %s",
+                    b.input.get("url"),
+                    out[:80].replace("\n", " "),
+                )
+                results.append(
+                    {"type": "tool_result", "tool_use_id": b.id, "content": out}
+                )
         messages.append({"role": "user", "content": results})
     return "Sorry, I could not finish this request."
 
@@ -126,19 +191,31 @@ def handle(item):
     m = mail.inboxes.messages.get(inbox_id=INBOX, message_id=item.message_id)
     who = sender_of(m)
     if who == INBOX.lower():
-        mail.inboxes.messages.update(inbox_id=INBOX, message_id=m.message_id, remove_labels=["unread"])
+        mail.inboxes.messages.update(
+            inbox_id=INBOX, message_id=m.message_id, remove_labels=["unread"]
+        )
         return
     if who not in ALLOWED:
         log.info("ignoring mail from untrusted sender %s", who)
-        mail.inboxes.messages.update(inbox_id=INBOX, message_id=m.message_id,
-                                     add_labels=["ignored"], remove_labels=["unread"])
+        mail.inboxes.messages.update(
+            inbox_id=INBOX,
+            message_id=m.message_id,
+            add_labels=["ignored"],
+            remove_labels=["unread"],
+        )
         return
     log.info("handling %s from %s: %s", m.message_id, who, m.subject)
     reply = scrub(answer(thread_transcript(m.thread_id)))
     key = "reply-" + hashlib.sha256(f"{INBOX}:{m.message_id}".encode()).hexdigest()
-    mail.inboxes.messages.reply(inbox_id=INBOX, message_id=m.message_id, text=reply, idempotency_key=key)
-    mail.inboxes.messages.update(inbox_id=INBOX, message_id=m.message_id,
-                                 add_labels=["replied"], remove_labels=["unread"])
+    mail.inboxes.messages.reply(
+        inbox_id=INBOX, message_id=m.message_id, text=reply, idempotency_key=key
+    )
+    mail.inboxes.messages.update(
+        inbox_id=INBOX,
+        message_id=m.message_id,
+        add_labels=["replied"],
+        remove_labels=["unread"],
+    )
     log.info("replied to %s", m.message_id)
 
 
@@ -146,7 +223,9 @@ def main():
     log.info("watching %s, trusted senders: %s", INBOX, ", ".join(sorted(ALLOWED)))
     while True:
         try:
-            items = mail.inboxes.messages.list(inbox_id=INBOX, labels=["unread"], ascending=True, limit=20).messages
+            items = mail.inboxes.messages.list(
+                inbox_id=INBOX, labels=["unread"], ascending=True, limit=20
+            ).messages
             for item in items:
                 try:
                     handle(item)
