@@ -1,0 +1,4 @@
+agentmail>=2.0
+anthropic>=2.0
+httpx
+beautifulsoup4
