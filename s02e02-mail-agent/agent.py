@@ -152,13 +152,47 @@ def thread_transcript(thread_id: str) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def answer(transcript: str) -> str:
-    messages = [
-        {
-            "role": "user",
-            "content": f"Email thread (oldest first). Reply to the newest message.\n\n{transcript}",
-        }
-    ]
+URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
+
+
+def urls_in(m) -> list[str]:
+    """Every http(s) address in a message: bare ones in the text and hrefs in the HTML, in order, no repeats."""
+    found = URL_RE.findall(getattr(m, "text", None) or "")
+    html = getattr(m, "html", None) or ""
+    if html:
+        found += [
+            a["href"]
+            for a in BeautifulSoup(html, "html.parser").find_all("a", href=True)
+        ]
+    seen, out = set(), []
+    for u in found:
+        u = u.rstrip(".,;:!?")
+        if u.startswith(("http://", "https://")) and u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
+def prefetch(urls: list[str]) -> str:
+    """Open the links in the newest mail before the model runs, so a linked page is always read."""
+    blocks = []
+    for u in urls[:3]:
+        out = fetch_url(u)
+        log.info("prefetch %s -> %s", u, out[:80].replace("\n", " "))
+        blocks.append(f"=== Page fetched from {u} ===\n{out}")
+    return "\n\n".join(blocks)
+
+
+def answer(transcript: str, pages: str = "") -> str:
+    content = (
+        f"Email thread (oldest first). Reply to the newest message.\n\n{transcript}"
+    )
+    if pages:
+        content += (
+            "\n\nThe links in the newest message were already opened for you. "
+            "Answer from these pages, not from the mail text:\n\n" + pages
+        )
+    messages = [{"role": "user", "content": content}]
     for _ in range(8):
         resp = llm.messages.create(
             model=MODEL, max_tokens=2000, system=SYSTEM, tools=TOOLS, messages=messages
@@ -210,7 +244,9 @@ def handle(item):
         )
         return
     log.info("handling %s from %s: %s", m.message_id, who, m.subject)
-    reply = scrub(answer(thread_transcript(m.thread_id)))
+    pages = prefetch(urls_in(m))
+    reply = scrub(answer(thread_transcript(m.thread_id), pages))
+    log.info("reply text: %s", reply[:200].replace("\n", " | "))
     key = "reply-" + hashlib.sha256(f"{INBOX}:{m.message_id}".encode()).hexdigest()
     try:
         mail.inboxes.messages.reply(
