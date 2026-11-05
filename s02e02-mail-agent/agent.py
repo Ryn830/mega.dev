@@ -130,6 +130,12 @@ def thread_transcript(thread_id: str) -> str:
     t = mail.threads.get(thread_id=thread_id)
     parts = []
     for m in t.messages:
+        # Only trusted senders and this agent's own replies reach the model. A mail from
+        # anyone else in the same thread is dropped, so its words can never steer a reply.
+        who = sender_of(m)
+        if who not in ALLOWED and who != INBOX.lower():
+            log.info("transcript: dropped message from untrusted sender %s", who)
+            continue
         body = (
             getattr(m, "text", None)
             or getattr(m, "extracted_text", None)
