@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 import anthropic
 import httpx
-from agentmail import AgentMail
+from agentmail import AgentMail, ConflictError
 from bs4 import BeautifulSoup
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -190,6 +190,11 @@ def sender_of(m) -> str:
 def handle(item):
     m = mail.inboxes.messages.get(inbox_id=INBOX, message_id=item.message_id)
     who = sender_of(m)
+    if "replied" in (m.labels or []):
+        mail.inboxes.messages.update(
+            inbox_id=INBOX, message_id=m.message_id, remove_labels=["unread"]
+        )
+        return
     if who == INBOX.lower():
         mail.inboxes.messages.update(
             inbox_id=INBOX, message_id=m.message_id, remove_labels=["unread"]
@@ -207,9 +212,13 @@ def handle(item):
     log.info("handling %s from %s: %s", m.message_id, who, m.subject)
     reply = scrub(answer(thread_transcript(m.thread_id)))
     key = "reply-" + hashlib.sha256(f"{INBOX}:{m.message_id}".encode()).hexdigest()
-    mail.inboxes.messages.reply(
-        inbox_id=INBOX, message_id=m.message_id, text=reply, idempotency_key=key
-    )
+    try:
+        mail.inboxes.messages.reply(
+            inbox_id=INBOX, message_id=m.message_id, text=reply, idempotency_key=key
+        )
+    except ConflictError:
+        # same idempotency key already used: this message was replied to before, so just clear it
+        log.info("already replied to %s (409), clearing unread", m.message_id)
     mail.inboxes.messages.update(
         inbox_id=INBOX,
         message_id=m.message_id,
