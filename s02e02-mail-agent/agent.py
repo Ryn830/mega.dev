@@ -16,6 +16,7 @@ import os
 import re
 import socket
 import time
+from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from urllib.parse import urlparse
 
@@ -36,6 +37,8 @@ ALLOWED = {
 }
 MODEL = os.getenv("MODEL", "claude-sonnet-5-5")
 POLL = int(os.getenv("POLL_SECONDS", "10"))
+LOOKBACK_HOURS = int(os.getenv("LOOKBACK_HOURS", "2"))
+DONE_LABELS = {"replied", "ignored", "sent"}
 
 mail = AgentMail(api_key=AM_KEY)
 llm = anthropic.Anthropic()
@@ -268,10 +271,17 @@ def main():
     log.info("watching %s, trusted senders: %s", INBOX, ", ".join(sorted(ALLOWED)))
     while True:
         try:
+            # Do not filter on "unread": mail that AgentMail files as spam never shows up
+            # under it, and opening a mail in the console clears it. Look at all recent
+            # mail, spam included, and skip what this agent already handled or sent.
+            # Only trusted senders get past handle(), so spam from others is still ignored.
+            since = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
             items = mail.inboxes.messages.list(
-                inbox_id=INBOX, labels=["unread"], ascending=True, limit=20
+                inbox_id=INBOX, after=since, include_spam=True, ascending=True, limit=50
             ).messages
             for item in items:
+                if DONE_LABELS & set(getattr(item, "labels", None) or []):
+                    continue
                 try:
                     handle(item)
                 except Exception:
