@@ -75,6 +75,7 @@ export function createToolServer({ publicUrl }) {
         data: z.string().optional().describe('File bytes as base64, or a data: URI.'),
         text: z.string().optional().describe('File content as plain text (UTF-8).'),
         url: z.string().optional().describe('An https URL to copy the file from.'),
+        prefix: z.string().max(1000).optional().describe('Optional text line to put on top of the file, as its own first line. A newline is added after it.'),
       }),
       outputSchema: z.object({ url: z.string() }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -107,6 +108,9 @@ export function createToolServer({ publicUrl }) {
         }
       } catch (e) {
         return fail(e.message);
+      }
+      if (typeof args.prefix === 'string' && args.prefix.length > 0) {
+        buffer = Buffer.concat([Buffer.from(args.prefix.replace(/\r?\n+$/, '') + '\n', 'utf8'), buffer]);
       }
       if (buffer.length === 0) return fail('The file is empty.');
       if (buffer.length > MAX_UPLOAD_BYTES) return fail(`The file is larger than ${MAX_UPLOAD_BYTES} bytes.`);
