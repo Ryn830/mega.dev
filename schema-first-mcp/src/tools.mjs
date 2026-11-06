@@ -15,7 +15,17 @@ const fail = (message) => ({ content: [{ type: 'text', text: message }], isError
 
 /* ---------- the server ---------- */
 export function createToolServer({ publicUrl }) {
-  const server = new McpServer({ name: 'schema-first-mcp', version: '1.0.0' });
+  const server = new McpServer(
+    { name: 'schema-first-mcp', version: '1.0.0' },
+    {
+      instructions:
+        'Four tools. memo_write saves a short text note and returns its id. memo_search finds saved notes by words in their text. ' +
+        'upload stores a file (base64 data, plain text, or an https URL) and returns a link served by this server. ' +
+        'transcribe takes an https URL of an audio or video file (up to 25 MB and 15 minutes) and returns timestamped text segments; start and end are in seconds. ' +
+        'Every result is structured content that matches the tool output schema. Errors name the input that failed and say why. ' +
+        'Sign-in is OAuth 2.1 with PKCE; the plan page linked from the protected resource metadata explains what data is kept.',
+    },
+  );
   const base = publicUrl.replace(/\/$/, '');
 
   server.registerTool(
@@ -127,11 +137,19 @@ export function createToolServer({ publicUrl }) {
     },
     async ({ url }) => {
       try {
-        const { buffer } = await safeFetch(url, { maxBytes: MAX_AUDIO_BYTES });
-        const result = await transcribeAudio(buffer);
+        const { buffer, contentType } = await safeFetch(url, { maxBytes: MAX_AUDIO_BYTES });
+        let result;
+        try {
+          result = await transcribeAudio(buffer);
+        } catch (e) {
+          if (/^Could not read audio/.test(e.message) && /html|json|xml|text\//.test(contentType)) {
+            throw new Error(`it is a web page or document (${contentType}), not an audio file. Could not read audio from it.`);
+          }
+          throw e;
+        }
         return ok(result, `${result.segments.length} segment(s) transcribed.`);
       } catch (e) {
-        return fail(e.message);
+        return fail(`Could not transcribe ${url}: ${e.message}`);
       }
     },
   );

@@ -43,6 +43,26 @@ function decode(buffer) {
   });
 }
 
+/**
+ * Whisper writes clock times in several ways ("940", "9.40", "9 40"). Write them as H:MM
+ * when a time word makes the meaning clear, so the text reads like the speech.
+ */
+export function normalizeTimes(text) {
+  const valid = (h, m) => h >= 0 && h <= 24 && m >= 0 && m <= 59;
+  const cue = '(at|by|from|until|till|before|after|around|opens?|closes?|starts?|ends?|begins?|time is)';
+  return text
+    // 9.40 or 9:40 with an optional am/pm
+    .replace(/\b(\d{1,2})[.:](\d{2})(?!\d)(\s?[ap]\.?m\.?)?/gi, (all, h, m, ap) =>
+      valid(+h, +m) ? `${+h}:${m}${ap ? ' ' + ap.trim() : ''}` : all)
+    // "at 940" or "opens at 1015": three or four digits after a time cue
+    .replace(new RegExp(`\\b${cue}\\s+(\\d{3,4})(?!\\d|[,.]\\d|\\s?(?:steps|people|items|miles|km|feet|years|dollars))`, 'gi'), (all, w, d) => {
+      const h = +d.slice(0, -2);
+      const m = d.slice(-2);
+      if (!valid(h, +m)) return all;
+      return `${w} ${h}:${m}`;
+    });
+}
+
 let queue = Promise.resolve(); // one transcription at a time: the model uses the CPU fully
 
 export function transcribeAudio(buffer) {
@@ -56,10 +76,10 @@ export function transcribeAudio(buffer) {
       .map((c) => ({
         start: Number(c.timestamp?.[0] ?? 0),
         end: Number(c.timestamp?.[1] ?? duration),
-        text: String(c.text).trim(),
+        text: normalizeTimes(String(c.text).trim()),
       }))
       .filter((s) => s.text);
-    if (segments.length === 0 && result.text?.trim()) segments.push({ start: 0, end: duration, text: result.text.trim() });
+    if (segments.length === 0 && result.text?.trim()) segments.push({ start: 0, end: duration, text: normalizeTimes(result.text.trim()) });
     return { segments, duration: Math.round(duration * 100) / 100 };
   });
   queue = run.catch(() => {});
