@@ -1,3 +1,6 @@
 .mega-log/
 rig-handover/
 rig/
+
+# root-level markdown (handoff, challenge log) stays local
+/*.md
