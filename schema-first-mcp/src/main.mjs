@@ -38,6 +38,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// Request log: method, path (no query string), status, time, size, caller. Never headers, bodies or tokens.
+app.use((req, res, next) => {
+  if (req.path === '/healthz') return next();
+  const t0 = Date.now();
+  res.on('finish', () => {
+    const rpc = res.locals.rpc ? ` rpc=${res.locals.rpc}` : '';
+    const ua = String(req.get('user-agent') || '-').slice(0, 60);
+    console.log(`req ${req.method} ${req.path} ${res.statusCode} ${Date.now() - t0}ms ${res.get('content-length') || '-'}B ip=${req.ip} ua="${ua}"${rpc}`);
+  });
+  next();
+});
+
 app.get('/healthz', async (_req, res) => {
   try {
     await pingDb();
@@ -107,7 +119,14 @@ app.all(
     expectedResource: new URL(mcpUrl),
   }),
   express.json({ limit: '30mb' }),
-  (req, res) => nodeHandler(req, res, req.body),
+  (req, res) => {
+    const b = Array.isArray(req.body) ? req.body[0] : req.body;
+    if (b && typeof b.method === 'string') {
+      const tool = b.method === 'tools/call' && typeof b.params?.name === 'string' ? `:${b.params.name.slice(0, 40)}` : '';
+      res.locals.rpc = `${b.method.slice(0, 40)}${tool}`;
+    }
+    nodeHandler(req, res, req.body);
+  },
 );
 
 app.use((err, _req, res, _next) => {
