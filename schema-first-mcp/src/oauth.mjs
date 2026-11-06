@@ -43,6 +43,23 @@ function validRedirectUri(uri) {
   }
 }
 
+const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
+
+// RFC 8252 section 7.3: for loopback redirects, the port may differ from the registered one.
+export function redirectMatches(registered, requested) {
+  if (registered.includes(requested)) return true;
+  try {
+    const r = new URL(requested);
+    if (r.protocol !== 'http:' || !LOOPBACK.includes(r.hostname)) return false;
+    return registered.some((x) => {
+      const u = new URL(x);
+      return u.protocol === 'http:' && u.hostname === r.hostname && u.pathname === r.pathname && u.search === r.search;
+    });
+  } catch {
+    return false;
+  }
+}
+
 function oauthError(res, status, error, description) {
   res.status(status).set('Cache-Control', 'no-store').json({ error, error_description: description });
 }
@@ -174,7 +191,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
   async function validateAuthRequest(params) {
     const client = await getClient(params.client_id);
     if (!client) return { fatal: 'Unknown client.' };
-    if (!client.redirect_uris.includes(params.redirect_uri)) return { fatal: 'The redirect URI is not registered for this client.' };
+    if (!redirectMatches(client.redirect_uris, params.redirect_uri)) return { fatal: 'The redirect URI is not registered for this client.' };
     const redirectError = (error, description) => ({ client, redirectError: { error, description } });
     if (params.response_type !== undefined && params.response_type !== 'code') {
       return redirectError('unsupported_response_type', 'Only response_type=code is supported.');
