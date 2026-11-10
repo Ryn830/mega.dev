@@ -63,6 +63,14 @@ export function normalizeTimes(text) {
     });
 }
 
+/** Load the model and run one short silent clip, so the first real call is not the slow one. */
+export async function warmUp() {
+  const t0 = Date.now();
+  const asr = await loadModel();
+  await asr(new Float32Array(SAMPLE_RATE * 2), { return_timestamps: true });
+  return Date.now() - t0;
+}
+
 let queue = Promise.resolve(); // one transcription at a time: the model uses the CPU fully
 
 export function transcribeAudio(buffer) {

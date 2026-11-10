@@ -6,6 +6,7 @@ import { initDb, pingDb, loadFile, noteCount } from './store.mjs';
 import { createOAuth } from './oauth.mjs';
 import { createToolServer } from './tools.mjs';
 import { planPage } from './plan.mjs';
+import { warmUp } from './transcribe.mjs';
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_URL = (
@@ -138,4 +139,7 @@ const notes = await noteCount();
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`MCP server listening on :${PORT}`);
   console.log(`public URL ${PUBLIC_URL}  mcp ${mcpUrl}  notes ${notes}`);
+  warmUp()
+    .then((ms) => console.log(`transcribe model warm in ${ms}ms`))
+    .catch((e) => console.error('transcribe warm-up failed:', e?.message));
 });
