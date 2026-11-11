@@ -23,6 +23,15 @@ All answers are JSON. Times are ISO 8601, UTC.
 - Optional `?status=open` or `?status=resolved`: only incidents with that `status`, same fields, still newest
   first. No `status` = all. Any other value answers `400` with `{ "error": "…" }`. Combines with `since`.
 
+## `GET /incidents/{id}`
+
+```json
+{ "incident": { "id": "INC-1234", "service": "booking-api", "summary": "…", "status": "open", "openedAt": "2026-11-11T02:43:00.000Z" } }
+```
+
+- One incident from the feed, with the same fields `GET /incidents` gives it.
+- An id that is not in the feed answers `404` with `{ "error": "not found" }`.
+
 ## Upstream: the production incident feed
 
 This API reads `FEED_URL` (`GET`, no token). The feed also takes admin writes for ops:
