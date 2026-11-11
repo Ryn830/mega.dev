@@ -18,6 +18,8 @@ All answers are JSON. Times are ISO 8601, UTC.
 
 - Every incident production has, newest first, with exactly these fields.
 - Read from production's incident feed (`FEED_URL`).
+- Optional `?since=<ISO time>`: only incidents with `openedAt` after that time, same fields, still newest
+  first. No `since` = all. A `since` that is not a time answers `400` with `{ "error": "…" }`.
 
 ## Upstream: the production incident feed
 

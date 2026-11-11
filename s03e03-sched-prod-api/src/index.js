@@ -13,7 +13,14 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/incidents') {
-      return json({ incidents: await feed(env) });
+      const since = url.searchParams.get('since');
+      let incidents = await feed(env);
+      if (since !== null) {
+        const t = Date.parse(since);
+        if (Number.isNaN(t)) return json({ error: 'since must be an ISO 8601 time' }, 400);
+        incidents = incidents.filter((i) => Date.parse(i.openedAt) > t);
+      }
+      return json({ incidents });
     }
     return json({ error: 'not found' }, 404);
   },
