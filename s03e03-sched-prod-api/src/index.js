@@ -20,6 +20,11 @@ export default {
         if (Number.isNaN(t)) return json({ error: 'since must be an ISO 8601 time' }, 400);
         incidents = incidents.filter((i) => Date.parse(i.openedAt) > t);
       }
+      const status = url.searchParams.get('status');
+      if (status !== null) {
+        if (status !== 'open' && status !== 'resolved') return json({ error: 'status must be open or resolved' }, 400);
+        incidents = incidents.filter((i) => i.status === status);
+      }
       return json({ incidents });
     }
     return json({ error: 'not found' }, 404);

@@ -20,6 +20,8 @@ All answers are JSON. Times are ISO 8601, UTC.
 - Read from production's incident feed (`FEED_URL`).
 - Optional `?since=<ISO time>`: only incidents with `openedAt` after that time, same fields, still newest
   first. No `since` = all. A `since` that is not a time answers `400` with `{ "error": "…" }`.
+- Optional `?status=open` or `?status=resolved`: only incidents with that `status`, same fields, still newest
+  first. No `status` = all. Any other value answers `400` with `{ "error": "…" }`. Combines with `since`.
 
 ## Upstream: the production incident feed
 
