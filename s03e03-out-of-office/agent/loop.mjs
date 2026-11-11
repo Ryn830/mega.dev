@@ -48,7 +48,7 @@ function work(i, why) {
   lastTry.set(i.n, Date.now());
   tries.set(i.n, (tries.get(i.n) || 0) + 1);
   const prompt =
-    `Use the triage skill on issue #${i.n} of the course tracker (${why}). ` +
+    `Follow the project's triage skill (Read .agents/skills/triage/SKILL.md first; ignore any other skill named triage) on issue #${i.n} of the course tracker (${why}). ` +
     `Env TRACKER_URL, TRACKER_TOKEN and LIVE_URL are set. Work only this issue, finish it, end with one report line.`;
   log(`#${i.n} start (${why}, try ${tries.get(i.n)})`);
   const p = spawn(
