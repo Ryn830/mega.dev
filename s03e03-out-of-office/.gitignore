@@ -1,2 +1,4 @@
 agent/.env
 agent/agent.log
+round.receipt
+run.out

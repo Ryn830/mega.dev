@@ -32,9 +32,10 @@ const lastAt = (list) => Math.max(0, ...list.map((e) => +new Date(e.at)));
 const ownerWaiting = (i) =>
   lastAt(i.thread.filter(isAnswer)) > lastAt(i.thread.filter((e) => e.by === 'agent'));
 
+const TK = new URL('./tk.sh', import.meta.url).pathname;
 const ALLOWED = [
   'Read', 'Edit', 'Write', 'Glob', 'Grep',
-  'Bash(curl:*)', 'Bash(node:*)', 'Bash(gh pr:*)', 'Bash(git:*)',
+  'Bash(curl:*)', `Bash(${TK}:*)`, `Bash(sh ${TK}:*)`, 'Bash(node:*)', 'Bash(gh pr:*)', 'Bash(git:*)',
   'Bash(ls:*)', 'Bash(cat:*)', 'Bash(jq:*)', 'Bash(date:*)',
 ].join(',');
 
@@ -49,7 +50,7 @@ function work(i, why) {
   tries.set(i.n, (tries.get(i.n) || 0) + 1);
   const prompt =
     `Follow the project's triage skill (Read .agents/skills/triage/SKILL.md first; ignore any other skill named triage) on issue #${i.n} of the course tracker (${why}). ` +
-    `Env TRACKER_URL, TRACKER_TOKEN and LIVE_URL are set. Work only this issue, finish it, end with one report line.`;
+    `Call the tracker only through ${TK} METHOD PATH [JSON_BODY] (e.g. ${TK} GET /issues/${i.n}); it adds the token. Live address: ${env.LIVE_URL} (use it literally in curl). Work only this issue, finish it, end with one report line.`;
   log(`#${i.n} start (${why}, try ${tries.get(i.n)})`);
   const p = spawn(
     'claude',
@@ -93,7 +94,7 @@ async function tick() {
       const cooled = Date.now() - (lastTry.get(i.n) || 0) > 90_000;
       let why = null;
       if (ownerWaiting(i) && cooled) why = 'owner answered';
-      else if (!finished && !/· (asked|waiting) ·/.test(line) && cooled && (tries.get(i.n) || 0) < 4) why = 'new or unfinished';
+      else if (!finished && !/· (asked|waiting) ·/.test(line) && cooled && (tries.get(i.n) || 0) < 8) why = 'new or unfinished';
       if (why) {
         work(i, why);
         break;
