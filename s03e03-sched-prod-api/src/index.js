@@ -27,6 +27,14 @@ export default {
       }
       return json({ incidents });
     }
+    const one = url.pathname.match(/^\/incidents\/([^/]+)$/);
+    if (request.method === 'GET' && one) {
+      let id;
+      try { id = decodeURIComponent(one[1]); } catch { return json({ error: 'not found' }, 404); }
+      const incident = (await feed(env)).find((i) => i.id === id);
+      if (!incident) return json({ error: 'not found' }, 404);
+      return json({ incident });
+    }
     return json({ error: 'not found' }, 404);
   },
 };
