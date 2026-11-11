@@ -1,0 +1,13 @@
+{
+  "name": "sched-prod-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --env production",
+    "start": "node server.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}
